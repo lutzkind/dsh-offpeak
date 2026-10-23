@@ -16,8 +16,8 @@ paid request -> verified PEAK -> park before dispatch -> boundary timer -> same 
 ## Install
 
 ```sh
-dsh plugin --profile web add git+https://github.com/lutzkind/dsh-offpeak.git#v0.1.0
-dsh plugin --profile headless add git+https://github.com/lutzkind/dsh-offpeak.git#v0.1.0
+dsh plugin --profile web add git+https://github.com/lutzkind/dsh-offpeak.git#v0.1.1
+dsh plugin --profile headless add git+https://github.com/lutzkind/dsh-offpeak.git#v0.1.1
 ```
 
 Mount it in the profile or host patch:

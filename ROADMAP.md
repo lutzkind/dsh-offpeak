@@ -2,7 +2,8 @@
 
 ## Current
 
-- Verified 2026 DeepSeek / OpenCode Go policy and holiday calendar.
+- Verified 2026 OpenCode Go policy and holiday calendar.
+- Provider boundary: only `opencode-go` is managed.
 - Primary and auxiliary request holds.
 - Session-scoped explicit peak authorization.
 - `offpeak` service for free-first paid timing.

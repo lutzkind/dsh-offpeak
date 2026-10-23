@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 — 2026-10-23
+
+- **Breaking scope change:** the shipped plugin now manages the `opencode-go`
+  provider only. The direct DeepSeek API (`deepseek`) policy was removed.
+- `deepseek` and every other provider pass through both waterfalls untouched:
+  no evaluation, hold, delay, fail-closed decision, or routing mutation.
+- `BUILTIN_POLICIES` contains exactly `deepseek-opencode-go`; no direct-DeepSeek
+  policy is registered.
+- Existing OpenCode Go semantics are unchanged: peak windows, holidays, flat
+  models, fail-closed unknown Go models, control toggle, and session override.
+
 ## 0.1.1 — 2026-10-23
 
 - Add `beam-*` to the explicitly verified flat OpenCode Go models so the

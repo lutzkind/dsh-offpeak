@@ -1,4 +1,10 @@
-/** Verified DeepSeek / OpenCode Go peak pricing policy and pure evaluation. */
+/**
+ * Verified OpenCode Go peak pricing policy and pure evaluation.
+ *
+ * Ownership boundary: the shipped plugin manages the `opencode-go` provider
+ * only. The direct DeepSeek API (`deepseek`) has its own native Harness
+ * routing and must never be delayed, authorized, or rejected by this package.
+ */
 
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6
 
@@ -75,7 +81,14 @@ export const CHINA_PUBLIC_HOLIDAYS_2026: HolidayCalendar = {
 
 export const CHINA_PUBLIC_HOLIDAYS: HolidayCalendar[] = [CHINA_PUBLIC_HOLIDAYS_2026]
 
-/** Peak windows shared by the OpenCode Go gateway and the direct DeepSeek API, in UTC. */
+/** The one provider this plugin owns. Everything else is out of scope. */
+export const MANAGED_PROVIDER = 'opencode-go'
+
+export function isManagedProvider(providerId: string): boolean {
+  return providerId.toLowerCase() === MANAGED_PROVIDER
+}
+
+/** Peak windows published by the OpenCode Go gateway, in UTC. */
 export const DEEPSEEK_PEAK_WINDOWS: WeeklyWindow[] = [
   { days: [1, 2, 3, 4, 5], start: '01:00', end: '04:00' },
   { days: [1, 2, 3, 4, 5], start: '06:00', end: '10:00' },
@@ -108,25 +121,14 @@ export const DEEPSEEK_OPENCODE_GO: PricingPolicy = {
   verifiedAt: '2026-10-15',
 }
 
-/** Direct DeepSeek API route: same weekly windows and holiday rule. */
-export const DEEPSEEK_API: PricingPolicy = {
-  id: 'deepseek-api',
-  providers: ['deepseek'],
-  models: [
-    'deepseek-flash',
-    'deepseek-v4-pro',
-    'deepseek-v4-flash',
-    'deepseek-v4-flash-vision-exp',
-  ],
-  timeZone: 'UTC',
-  blocked: DEEPSEEK_PEAK_WINDOWS,
-  holidays: CHINA_PUBLIC_HOLIDAYS,
-  multiplier: 2,
-  source: 'https://api-docs.deepseek.com/quick_start/pricing',
-  verifiedAt: '2026-10-15',
-}
-
-export const BUILTIN_POLICIES: PricingPolicy[] = [DEEPSEEK_OPENCODE_GO, DEEPSEEK_API]
+/**
+ * The direct DeepSeek API is intentionally NOT managed.
+ *
+ * It is an independent, manually selected provider. Keeping it out of
+ * `BUILTIN_POLICIES` makes the boundary structural: the plugin cannot hold,
+ * deny, authorize, or otherwise intercept a `deepseek` route.
+ */
+export const BUILTIN_POLICIES: PricingPolicy[] = [DEEPSEEK_OPENCODE_GO]
 
 /** Providers verified to have no peak/off-peak tiers at all. */
 export const VERIFIED_FLAT_PROVIDERS: Record<string, FlatProviderFact> = {

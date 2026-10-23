@@ -1,13 +1,19 @@
 # dsh-offpeak
 
 DeepSeek Harness (`dsh`) native off-peak pricing guard for the OpenCode Go
-subscription and the direct DeepSeek API.
+provider only.
 
-`dsh-offpeak` parks a paid model request before the provider attempt exists
-when the route is inside a verified DeepSeek peak window. The same request,
-session, and turn continue when off-peak pricing returns. There is no second
-prompt, no duplicate session, no synthetic continuation, and no provider
-traffic while the request is waiting.
+`dsh-offpeak` parks a paid OpenCode Go model request before the provider
+attempt exists when the route is inside a verified DeepSeek peak window. The
+same request, session, and turn continue when off-peak pricing returns. There
+is no second prompt, no duplicate session, no synthetic continuation, and no
+provider traffic while the request is waiting.
+
+Direct DeepSeek API routes (`deepseek/...`) are deliberately outside this
+plugin. They are independent, manually selected routes and always use normal
+native Harness routing: no hold, no delay, no fail-closed decision, and no
+routing mutation. There is no automatic fallback from OpenCode Go to the direct
+API, and a peak hold can never escape to it.
 
 ```
 paid request -> verified PEAK -> park before dispatch -> boundary timer -> same request continues
@@ -16,8 +22,8 @@ paid request -> verified PEAK -> park before dispatch -> boundary timer -> same 
 ## Install
 
 ```sh
-dsh plugin --profile web add git+https://github.com/lutzkind/dsh-offpeak.git#v0.1.1
-dsh plugin --profile headless add git+https://github.com/lutzkind/dsh-offpeak.git#v0.1.1
+dsh plugin --profile web add git+https://github.com/lutzkind/dsh-offpeak.git#v0.2.0
+dsh plugin --profile headless add git+https://github.com/lutzkind/dsh-offpeak.git#v0.2.0
 ```
 
 Mount it in the profile or host patch:
@@ -43,26 +49,41 @@ Harness's own `agent/request` and `llm/stream` waterfalls.
   compaction and other direct `ctx.llm.stream()` consumers.
 - **Titles** — the shipped title provider uses `prepareCall()` directly, which
   bypasses both waterfalls. Configure the title provider on a free or flat
-  route (`opencode` / `deepseek-v4.1-flash-free`) so it cannot create paid peak
+  OpenCode Go route (`opencode-go` / `beam-free`) so it cannot create paid peak
   traffic.
+
+## Scope
+
+The plugin owns exactly one provider: `opencode-go`.
+
+```text
+provider == opencode-go  -> off-peak policy may apply
+provider != opencode-go  -> pass through untouched
+```
+
+For any other provider the plugin does not intercept, delay, fail closed,
+authorize, deny, or mutate routing. In particular the official DeepSeek Direct
+API (`deepseek`) is a separate provider with its own native configuration; it
+is never selected as an OpenCode Go fallback and never inherits an OpenCode Go
+hold.
 
 ## Policy
 
-The built-in policies are verified vendor facts:
+The built-in policy is a verified vendor fact:
 
 | Policy | Provider | Peak models | Schedule |
 |---|---|---|---|
 | `deepseek-opencode-go` | `opencode-go` | `deepseek-v4.1-flash`, `deepseek-v4-pro`, `deepseek-v4-flash`, `deepseek-v4-flash-vision-exp` | 01:00–04:00 and 06:00–10:00 UTC, Monday–Friday |
-| `deepseek-api` | `deepseek` | `deepseek-flash`, `deepseek-v4-pro`, `deepseek-v4-flash`, `deepseek-v4-flash-vision-exp` | identical |
 
 Weekends and Chinese statutory public holidays are full-day off-peak. The
 shipped holiday calendar is the 2026 State Council notice; a year without a
 calendar keeps the deterministic weekday schedule. Every other documented
 `opencode-go` model is explicitly flat-priced and is never delayed, including
 the OpenCode Go `beam-free` route. A model
-that matches neither the peak list nor the flat list under a configured
-provider evaluates `UNKNOWN` and fails closed at every hour. A provider with no
-policy evaluates `UNTRACKED` and is not guarded.
+that matches neither the peak list nor the flat list under `opencode-go`
+evaluates `UNKNOWN` and fails closed at every hour. A provider with no
+policy evaluates `UNTRACKED` and is not guarded; this is how `deepseek` and
+`opencode` behave by design.
 
 ## Commands
 

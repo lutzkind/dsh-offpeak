@@ -2,17 +2,20 @@
 
 ## Current
 
-- Verified 2026 OpenCode Go policy and holiday calendar.
-- Provider boundary: only `opencode-go` is managed.
-- Primary and auxiliary request holds.
+- Verified OpenCode Go and DeepSeek Direct API policies, with separate sources,
+  model coverage, and holiday rules.
+- Provider boundary: `opencode-go` and `deepseek` are managed; everything else
+  passes through.
+- Primary and auxiliary request holds for both paid providers.
 - Session-scoped explicit peak authorization.
-- `offpeak` service for free-first paid timing.
+- `offpeak` service for free-first OpenCode Go paid timing.
 - `/offpeak` status and control commands.
 
 ## Next
 
 - Add the 2027 State Council holiday calendar when published.
-- Re-verify the OpenCode Go model table after any provider catalog change.
+- Re-verify each provider's model table and peak schedule after any vendor
+  change; do not propagate one provider's facts to the other.
 - Add a policy status line for custom deployment policies only if a real need
   appears; the built-in set stays explicit and fail-closed.
 

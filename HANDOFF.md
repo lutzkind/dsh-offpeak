@@ -1,5 +1,35 @@
 # Handoff
 
+## 2026-10-23 — Restore DeepSeek Direct API management
+
+Status: released `v0.2.1`, installed in the live host profiles `web`, `headless`, `acp`, and `sdk`, verified.
+
+- Source: this repository.
+- Runtime: DeepSeek Harness 0.2.1-rc.2 on Node 24.
+- Scope correction: the plugin manages both paid providers again:
+  `opencode-go` and `deepseek` (official Direct API). `opencode` (Zen) remains
+  out of scope.
+- Policies are separate: `deepseek-opencode-go` and `deepseek-api` have their
+  own providers, models, sources, and verification dates even though the
+  current windows match.
+- Direct API policy freshly verified 2026-10-23 against
+  `https://api-docs.deepseek.com/quick_start/pricing`: peak 01:00–04:00 and
+  06:00–10:00 UTC, Monday–Friday, excluding Chinese public holidays; weekends
+  and holidays off-peak in full; off-peak 50% of peak; current models
+  `deepseek-flash`/`deepseek-v4-pro`, legacy Flash aliases still accepted.
+- Direct DeepSeek stays explicit/manual selection only. The plugin holds Direct
+  requests at peak but never selects the provider or falls back to it.
+- `dsh-free-first` is unchanged and remains OpenCode Go-only; it never
+  intercepts, probes, or maintains health for `deepseek/...`.
+- Tests: `npm run check` (38 tests: both policies, provider-specific windows,
+  Direct holds, global/session controls, unknown models, free-first boundary;
+  no provider traffic).
+- Release: `v0.2.1`; installed in `/root/.dsh/profiles/{web,headless,acp,sdk}`
+  from the tag. The installed `dist/*.js` sha256 values match the tag.
+- Host verification: `python3 /root/scripts/dsh_verify.py --live`,
+  `node /root/scripts/dsh_verify_runtime.mjs`, and
+  `node /root/scripts/dsh_verify_plugins.mjs`.
+
 ## 2026-10-23 — OpenCode Go-only provider boundary
 
 Status: released `v0.2.0`, installed in the live host profiles `web`, `headless`, `acp`, and `sdk`, verified.

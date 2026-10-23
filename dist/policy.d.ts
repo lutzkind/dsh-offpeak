@@ -1,4 +1,10 @@
-/** Verified DeepSeek / OpenCode Go peak pricing policy and pure evaluation. */
+/**
+ * Verified OpenCode Go peak pricing policy and pure evaluation.
+ *
+ * Ownership boundary: the shipped plugin manages the `opencode-go` provider
+ * only. The direct DeepSeek API (`deepseek`) has its own native Harness
+ * routing and must never be delayed, authorized, or rejected by this package.
+ */
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export interface WeeklyWindow {
     days: Weekday[];
@@ -48,7 +54,10 @@ export interface FlatProviderFact {
  */
 export declare const CHINA_PUBLIC_HOLIDAYS_2026: HolidayCalendar;
 export declare const CHINA_PUBLIC_HOLIDAYS: HolidayCalendar[];
-/** Peak windows shared by the OpenCode Go gateway and the direct DeepSeek API, in UTC. */
+/** The one provider this plugin owns. Everything else is out of scope. */
+export declare const MANAGED_PROVIDER = "opencode-go";
+export declare function isManagedProvider(providerId: string): boolean;
+/** Peak windows published by the OpenCode Go gateway, in UTC. */
 export declare const DEEPSEEK_PEAK_WINDOWS: WeeklyWindow[];
 /**
  * The Go pricing table prices only the DeepSeek models by time of day.
@@ -56,8 +65,13 @@ export declare const DEEPSEEK_PEAK_WINDOWS: WeeklyWindow[];
  * explicitly so an unlisted future model still fails closed.
  */
 export declare const DEEPSEEK_OPENCODE_GO: PricingPolicy;
-/** Direct DeepSeek API route: same weekly windows and holiday rule. */
-export declare const DEEPSEEK_API: PricingPolicy;
+/**
+ * The direct DeepSeek API is intentionally NOT managed.
+ *
+ * It is an independent, manually selected provider. Keeping it out of
+ * `BUILTIN_POLICIES` makes the boundary structural: the plugin cannot hold,
+ * deny, authorize, or otherwise intercept a `deepseek` route.
+ */
 export declare const BUILTIN_POLICIES: PricingPolicy[];
 /** Providers verified to have no peak/off-peak tiers at all. */
 export declare const VERIFIED_FLAT_PROVIDERS: Record<string, FlatProviderFact>;

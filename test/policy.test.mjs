@@ -2,8 +2,6 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   BUILTIN_POLICIES,
-  DEEPSEEK_API,
-  DEEPSEEK_OPENCODE_GO,
   evaluatePricing,
   formatTransitionInTimeZone,
 } from '../dist/policy.js'
@@ -66,11 +64,15 @@ test('untracked OpenCode Zen is allowed and documented as flat', () => {
   assert.equal(decision.allowed, true)
 })
 
-test('direct DeepSeek and OpenCode Go policies remain distinguishable', () => {
-  assert.deepEqual(DEEPSEEK_API.providers, ['deepseek'])
-  assert.deepEqual(DEEPSEEK_OPENCODE_GO.providers, ['opencode-go'])
-  assert.equal(evaluatePricing(BUILTIN_POLICIES, 'deepseek', 'deepseek-flash', at('2026-10-19T02:00:00Z')).state, 'PEAK')
-  assert.equal(evaluatePricing(BUILTIN_POLICIES, 'deepseek', 'deepseek-v9-unknown', at('2026-10-19T02:00:00Z')).state, 'UNKNOWN')
+test('direct DeepSeek is outside the managed provider boundary', () => {
+  assert.deepEqual(BUILTIN_POLICIES.map(policy => policy.id), ['deepseek-opencode-go'])
+  assert.deepEqual(BUILTIN_POLICIES.flatMap(policy => policy.providers), ['opencode-go'])
+  for (const time of ['2026-10-19T02:00:00Z', '2026-10-19T05:00:00Z', '2026-10-24T02:00:00Z']) {
+    const decision = evaluatePricing(BUILTIN_POLICIES, 'deepseek', 'deepseek-flash', at(time))
+    assert.equal(decision.state, 'UNTRACKED', time)
+    assert.equal(decision.allowed, true)
+    assert.equal(decision.nextTransition, undefined)
+  }
 })
 
 test('transition formatting names the boundary and date', () => {

@@ -2,12 +2,28 @@
 
 `dsh-offpeak` is one DeepSeek Harness plugin package with three layers:
 
-1. `src/policy.ts` — pure verified pricing policy, holiday calendar, and
-   `evaluatePricing()`.
+1. `src/policy.ts` — pure verified OpenCode Go pricing policy, holiday
+   calendar, provider boundary, and `evaluatePricing()`.
 2. `src/engine.ts` — one process-local guard: holds, one boundary timer per
    hold, a shared wake signal, and durable control/session state.
 3. `src/index.ts` — Harness wiring: `agent/request`, `llm/stream`, the
    `offpeak` service, and `/offpeak` commands.
+
+## Provider boundary
+
+The package owns exactly one provider: `opencode-go`.
+
+```text
+provider == opencode-go  -> policy evaluation and possible hold
+provider != opencode-go  -> immediate pass-through, untouched
+```
+
+Both waterfalls short-circuit before evaluation for any other provider, so the
+plugin cannot hold, delay, fail closed, authorize, deny, or mutate a
+`deepseek` (direct API) or `opencode` (Zen) request. `BUILTIN_POLICIES` contains
+only `deepseek-opencode-go`; there is no registered direct-DeepSeek policy.
+Direct DeepSeek is a separately configured provider in the host profile and is
+selected only by explicit user action. There is no cross-provider fallback.
 
 ## Request path
 
@@ -59,7 +75,9 @@ activeHolds() -> hold records
 ```
 
 `@lutzkind/dsh-free-first` uses this interface for paid timing. It does not
-duplicate the policy.
+duplicate the policy. The service evaluates any route it is asked about, but
+the shipped waterfalls only call it for `opencode-go`; free-first only asks
+about its configured OpenCode Go fallback.
 
 ## Non-goals
 

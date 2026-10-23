@@ -7,7 +7,7 @@
  * and a shared wake signal, never on a polling loop.
  */
 import { OffpeakEngine } from './engine.js';
-import { BUILTIN_POLICIES, flatProviderNote, formatInTimeZone } from './policy.js';
+import { BUILTIN_POLICIES, flatProviderNote, formatInTimeZone, isManagedProvider } from './policy.js';
 import { OffpeakStateStore, resolveDshHome } from './state.js';
 import { join } from 'node:path';
 export const name = 'dsh-offpeak';
@@ -80,6 +80,9 @@ function formatStatus(engine, sessionId, route) {
         const decision = engine.evaluate(route.provider, route.model, sessionId, now);
         lines.push(`Current route: ${route.provider}/${route.model}`);
         lines.push(`Pricing: ${stateLabel(decision)}`);
+        if (!isManagedProvider(route.provider)) {
+            lines.push(`Scope: dsh-offpeak only manages opencode-go; ${route.provider} is never intercepted, delayed, or authorized by this plugin.`);
+        }
         if (decision.reason !== undefined)
             lines.push(`Policy: ${decision.reason}`);
         if (decision.nextTransition !== undefined) {
@@ -191,6 +194,9 @@ export async function apply(ctx, rawConfig) {
     ctx.effect(() => ctx.provide('offpeak', service), 'dsh-offpeak service');
     ctx.on('agent/request', async (payload, next) => {
         const resolved = await next();
+        // Ownership boundary: any non-OpenCode-Go route passes through untouched.
+        if (!isManagedProvider(resolved.provider))
+            return resolved;
         const sessionId = payload.agent.session.id;
         const decision = engine.evaluate(resolved.provider, resolved.model, sessionId);
         if (decision.allowed)
@@ -205,6 +211,8 @@ export async function apply(ctx, rawConfig) {
         return resolved;
     }, { prepend: true });
     ctx.on('llm/stream', (options, next) => {
+        if (!isManagedProvider(options.provider))
+            return next();
         const decision = engine.evaluate(options.provider, options.model, options.sessionId);
         if (decision.allowed)
             return next();
@@ -222,8 +230,8 @@ export async function apply(ctx, rawConfig) {
     });
     ctx.commands.register({
         name: 'offpeak',
-        description: 'Inspect or control the verified DeepSeek/OpenCode Go off-peak pricing guard',
+        description: 'Inspect or control the verified OpenCode Go off-peak pricing guard',
         handler: (invocation) => handleCommand(engine, invocation),
     });
-    ctx.logger.info(`dsh-offpeak: loaded (${config.enabled ? 'on' : 'paused'}, display ${config.displayTimeZone})`);
+    ctx.logger.info(`dsh-offpeak: loaded (${config.enabled ? 'on' : 'paused'}, display ${config.displayTimeZone}, provider opencode-go only)`);
 }

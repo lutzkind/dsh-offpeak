@@ -158,7 +158,52 @@ test('unknown models fail closed and never reach a provider handoff', async () =
   await rm(dir, { recursive: true, force: true })
 })
 
-test('an auxiliary direct LLM call is held by the llm/stream guard', async () => {
+test('a direct DeepSeek request bypasses the guard at peak', async () => {
+  const time = installFakeTime(PEAK)
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-offpeak-plugin-'))
+  const ctx = makeContext()
+  await apply(ctx, { displayTimeZone: 'UTC', statePath: join(dir, 'state.json') })
+  // Even an unlisted direct model is out of scope and must pass through.
+  for (const model of ['deepseek-flash', 'deepseek-v9-unknown']) {
+    const config = await ctx.emit('agent/request', {
+      agent: { session: { id: 's1' } }, signal: new AbortController().signal, turn: 1, step: 1,
+    }, { provider: 'deepseek', model })
+    assert.equal(config.provider, 'deepseek')
+    assert.equal(config.model, model)
+  }
+  assert.equal(time.pending(), 0)
+  const status = await ctx.command('offpeak').handler(invocation('s1', { provider: 'deepseek', model: 'deepseek-flash' }))
+  assert.match(status.text, /Pricing: UNTRACKED/)
+  assert.match(status.text, /only manages opencode-go/)
+  assert.match(status.text, /Held requests: none/)
+  time.restore()
+  ctx.disposers.forEach(dispose => dispose())
+  await rm(dir, { recursive: true, force: true })
+})
+
+test('a direct DeepSeek auxiliary stream is not wrapped by llm/stream', async () => {
+  const time = installFakeTime(PEAK)
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-offpeak-plugin-'))
+  const ctx = makeContext()
+  await apply(ctx, { displayTimeZone: 'UTC', statePath: join(dir, 'state.json') })
+  let dispatched = false
+  const stream = ctx.emit('llm/stream', {
+    provider: 'deepseek', model: 'deepseek-flash', sessionId: 's1', purpose: 'compaction',
+    signal: new AbortController().signal,
+  }, async function* () {
+    dispatched = true
+    yield { type: 'text-delta', text: 'ok' }
+  })
+  const value = await stream[Symbol.asyncIterator]().next()
+  assert.equal(value.done, false)
+  assert.equal(dispatched, true)
+  assert.equal(time.pending(), 0)
+  time.restore()
+  ctx.disposers.forEach(dispose => dispose())
+  await rm(dir, { recursive: true, force: true })
+})
+
+test('an auxiliary OpenCode Go call is held by the llm/stream guard', async () => {
   const time = installFakeTime(PEAK)
   const dir = await mkdtemp(join(tmpdir(), 'dsh-offpeak-plugin-'))
   const ctx = makeContext()

@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-10-23 — OpenCode Go is the only managed provider
+
+The provider boundary is structural: `BUILTIN_POLICIES` registers only
+`opencode-go`, and both waterfalls return immediately for every other provider.
+The direct DeepSeek API policy (`deepseek-api`) was removed rather than left
+configurable-off. Direct DeepSeek is an independent, manually selected provider
+with normal native Harness routing; it is never an automatic OpenCode Go
+fallback and never inherits an OpenCode Go hold.
+
 ## 2026-10-23 — Native Harness waterfalls, not an OpenCode port
 
 Use `agent/request` for primary steps and `llm/stream` for direct auxiliary

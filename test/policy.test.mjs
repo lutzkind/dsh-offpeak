@@ -43,10 +43,12 @@ test('next transition skips a holiday peak window', () => {
 })
 
 test('flat Go models are never delayed', () => {
-  const decision = evaluatePricing(BUILTIN_POLICIES, 'opencode-go', 'gpt-6-luna', at('2026-10-19T02:00:00Z'))
-  assert.equal(decision.state, 'FLAT')
-  assert.equal(decision.allowed, true)
-  assert.equal(decision.nextTransition, undefined)
+  for (const model of ['gpt-6-luna', 'beam-free', 'longcat-2.5-preview-free']) {
+    const decision = evaluatePricing(BUILTIN_POLICIES, 'opencode-go', model, at('2026-10-19T02:00:00Z'))
+    assert.equal(decision.state, 'FLAT', model)
+    assert.equal(decision.allowed, true)
+    assert.equal(decision.nextTransition, undefined)
+  }
 })
 
 test('an unlisted Go model fails closed at every hour', () => {

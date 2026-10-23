@@ -98,7 +98,7 @@ export const DEEPSEEK_OPENCODE_GO: PricingPolicy = {
   flatModels: [
     'grok-*', 'gpt-*', 'claude-*', 'gemini-*', 'glm-*', 'kimi-*', 'longcat-*',
     'mimo-*', 'minimax-*', 'muse-*', 'qwen*', 'hy*', 'space-bunny', 'step-*',
-    'cat-jam-free',
+    'cat-jam-free', 'beam-*',
   ],
   timeZone: 'UTC',
   blocked: DEEPSEEK_PEAK_WINDOWS,

@@ -58,7 +58,8 @@ The built-in policies are verified vendor facts:
 Weekends and Chinese statutory public holidays are full-day off-peak. The
 shipped holiday calendar is the 2026 State Council notice; a year without a
 calendar keeps the deterministic weekday schedule. Every other documented
-`opencode-go` model is explicitly flat-priced and is never delayed. A model
+`opencode-go` model is explicitly flat-priced and is never delayed, including
+the OpenCode Go `beam-free` route. A model
 that matches neither the peak list nor the flat list under a configured
 provider evaluates `UNKNOWN` and fails closed at every hour. A provider with no
 policy evaluates `UNTRACKED` and is not guarded.

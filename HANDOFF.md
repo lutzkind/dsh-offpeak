@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-10-23 — OpenCode Go-only provider boundary
+
+Status: released `v0.2.0`, installed in the live host profiles `web`, `headless`, `acp`, and `sdk`, verified.
+
+- Source: this repository.
+- Runtime: DeepSeek Harness 0.2.1-rc.2 on Node 24.
+- Scope change: only `opencode-go` is managed. The direct DeepSeek API policy
+  (`deepseek-api`) was removed; `BUILTIN_POLICIES` contains only
+  `deepseek-opencode-go`, and both waterfalls short-circuit for any other
+  provider.
+- Direct DeepSeek is a separate, explicitly selected provider with normal native
+  Harness routing: no hold, delay, fail-closed decision, authorization, or
+  routing mutation. No automatic fallback in either direction.
+- Existing OpenCode Go semantics are unchanged: peak windows, 2026 holidays,
+  flat models, unknown-model fail-closed, control toggle, and session override.
+- Tests: `npm run check` (25 tests, provider boundary and bypass included; no
+  provider traffic).
+- Release: `v0.2.0`; installed in `/root/.dsh/profiles/{web,headless,acp,sdk}`
+  from the tag. The installed `dist/*.js` sha256 values match the tag.
+- Host verification: `python3 /root/scripts/dsh_verify.py --live`,
+  `node /root/scripts/dsh_verify_runtime.mjs`, and
+  `node /root/scripts/dsh_verify_plugins.mjs`.
+
 ## 2026-10-23 — initial native implementation
 
 Status: released `v0.1.1`, installed in the live host profiles `web`, `headless`, `acp`, and `sdk`, verified.

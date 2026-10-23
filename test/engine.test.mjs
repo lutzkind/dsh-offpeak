@@ -121,14 +121,15 @@ test('UNKNOWN stays fail-closed even with a session override', async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-test('flat and untracked routes are never parked', async () => {
+test('flat and out-of-scope routes are never parked', async () => {
   const { engine, clock, dir } = await engineAt()
   assert.equal(engine.evaluate('opencode-go', 'gpt-6-luna').allowed, true)
   assert.equal(engine.evaluate('opencode', 'deepseek-v4.1-flash-free').allowed, true)
   const direct = engine.evaluate('deepseek', 'deepseek-flash')
-  assert.equal(direct.state, 'UNTRACKED')
-  assert.equal(direct.allowed, true)
-  await clock.advanceTo(Date.parse('2026-10-19T04:00:00Z'))
+  assert.equal(direct.state, 'PEAK')
+  assert.equal(direct.allowed, false)
+  await clock.advanceTo(Date.parse('2026-10-19T05:00:00Z'))
+  assert.equal(engine.evaluate('deepseek', 'deepseek-flash').allowed, true)
   await rm(dir, { recursive: true, force: true })
 })
 
@@ -152,6 +153,71 @@ test('session override persists across a reload', async () => {
   const reopened = new OffpeakStateStore(store.path)
   await reopened.load()
   assert.equal(reopened.current().sessions.s1.protection, 'off')
+  await clock.advanceTo(Date.parse('2026-10-19T04:00:00Z'))
+  await rm(dir, { recursive: true, force: true })
+})
+
+test('a Direct DeepSeek peak request parks with one boundary timer', async () => {
+  const { engine, clock, dir } = await engineAt()
+  let resolved = false
+  const wait = engine.waitUntilAllowed({ provider: 'deepseek', model: 'deepseek-flash', sessionId: 'direct-1' })
+    .then(value => { resolved = true; return value })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(resolved, false)
+  assert.equal(engine.activeHolds().length, 1)
+  assert.equal(engine.activeHolds()[0].provider, 'deepseek')
+  assert.equal(clock.pending(), 1)
+  await clock.advanceTo(Date.parse('2026-10-19T04:00:00Z'))
+  const decision = await wait
+  assert.equal(decision.allowed, true)
+  assert.equal(decision.policy?.id, 'deepseek-api')
+  assert.equal(engine.activeHolds().length, 0)
+  await rm(dir, { recursive: true, force: true })
+})
+
+test('the global control applies to Direct DeepSeek', async () => {
+  const { engine, clock, dir } = await engineAt()
+  await engine.setEnabled(false)
+  const paused = engine.evaluate('deepseek', 'deepseek-flash', 'direct-1')
+  assert.equal(paused.state, 'PEAK')
+  assert.equal(paused.allowed, false)
+  assert.match(paused.reason, /paused/)
+  await engine.setEnabled(true)
+  assert.equal(engine.evaluate('deepseek', 'deepseek-flash', 'direct-1').allowed, false)
+  await clock.advanceTo(Date.parse('2026-10-19T04:00:00Z'))
+  await rm(dir, { recursive: true, force: true })
+})
+
+test('a Direct session override authorizes only that session', async () => {
+  const { engine, clock, dir } = await engineAt()
+  await engine.setSessionProtection('direct-1', 'off')
+  assert.equal(engine.evaluate('deepseek', 'deepseek-flash', 'direct-1').allowed, true)
+  assert.equal(engine.evaluate('deepseek', 'deepseek-flash', 'direct-2').allowed, false)
+  assert.equal(engine.evaluate('opencode-go', 'deepseek-v4.1-flash', 'direct-1').allowed, true)
+  await clock.advanceTo(Date.parse('2026-10-19T04:00:00Z'))
+  await rm(dir, { recursive: true, force: true })
+})
+
+test('a Direct peak hold releases when its session protection is disabled', async () => {
+  const { engine, clock, dir } = await engineAt()
+  const wait = engine.waitUntilAllowed({ provider: 'deepseek', model: 'deepseek-flash', sessionId: 'direct-1' })
+  await new Promise(resolve => setImmediate(resolve))
+  await engine.setSessionProtection('direct-1', 'off')
+  const decision = await wait
+  assert.equal(decision.allowed, true)
+  assert.equal(decision.sessionProtection, 'off')
+  assert.equal(engine.activeHolds().length, 0)
+  assert.equal(clock.pending(), 0)
+  await clock.advanceTo(Date.parse('2026-10-19T04:00:00Z'))
+  await rm(dir, { recursive: true, force: true })
+})
+
+test('an unknown Direct model fails closed even with a session override', async () => {
+  const { engine, clock, dir } = await engineAt()
+  await engine.setSessionProtection('direct-1', 'off')
+  const decision = engine.evaluate('deepseek', 'deepseek-v9-unknown', 'direct-1')
+  assert.equal(decision.state, 'UNKNOWN')
+  assert.equal(decision.allowed, false)
   await clock.advanceTo(Date.parse('2026-10-19T04:00:00Z'))
   await rm(dir, { recursive: true, force: true })
 })

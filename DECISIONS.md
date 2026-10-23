@@ -1,13 +1,21 @@
 # Decisions
 
-## 2026-10-23 — OpenCode Go is the only managed provider
+## 2026-10-23 — Two paid providers, two separate policies
 
-The provider boundary is structural: `BUILTIN_POLICIES` registers only
-`opencode-go`, and both waterfalls return immediately for every other provider.
-The direct DeepSeek API policy (`deepseek-api`) was removed rather than left
-configurable-off. Direct DeepSeek is an independent, manually selected provider
-with normal native Harness routing; it is never an automatic OpenCode Go
-fallback and never inherits an OpenCode Go hold.
+The shipped plugin manages `opencode-go` and the official DeepSeek Direct API
+(`deepseek`). Each has its own `PricingPolicy` object, model coverage, source,
+and verification date; the current peak windows happen to match, but they are
+not shared constants or one merged policy. Both waterfalls evaluate either
+managed provider and pass everything else through untouched.
+
+Direct DeepSeek remains explicit/manual selection only: the plugin never selects
+it and never falls back to it. It only enforces the verified Direct API timing
+policy once that route is chosen. `dsh-free-first` remains OpenCode Go-only and
+never intercepts, probes, or maintains health for Direct DeepSeek.
+
+This corrects the earlier v0.2.0 decision that removed the direct policy. Native
+provider management is the intended behavior; free-first's narrower boundary is
+a separate plugin concern.
 
 ## 2026-10-23 — Native Harness waterfalls, not an OpenCode port
 
@@ -32,8 +40,8 @@ re-enters the same policy.
 
 The shipped title provider bypasses both waterfalls through `prepareCall()`.
 Rather than adding a fragile global interception, the host configuration points
-title generation at the free OpenCode Zen route. Titles are auxiliary and
-non-fatal.
+title generation at the free/flat OpenCode Go `beam-free` route. Titles are
+auxiliary and non-fatal.
 
 ## 2026-10-23 — Session override is explicit and persistent
 

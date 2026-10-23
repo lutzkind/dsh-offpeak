@@ -158,30 +158,36 @@ test('unknown models fail closed and never reach a provider handoff', async () =
   await rm(dir, { recursive: true, force: true })
 })
 
-test('a direct DeepSeek request bypasses the guard at peak', async () => {
+test('a direct DeepSeek peak request waits and releases at the boundary', async () => {
   const time = installFakeTime(PEAK)
   const dir = await mkdtemp(join(tmpdir(), 'dsh-offpeak-plugin-'))
   const ctx = makeContext()
   await apply(ctx, { displayTimeZone: 'UTC', statePath: join(dir, 'state.json') })
-  // Even an unlisted direct model is out of scope and must pass through.
-  for (const model of ['deepseek-flash', 'deepseek-v9-unknown']) {
-    const config = await ctx.emit('agent/request', {
-      agent: { session: { id: 's1' } }, signal: new AbortController().signal, turn: 1, step: 1,
-    }, { provider: 'deepseek', model })
-    assert.equal(config.provider, 'deepseek')
-    assert.equal(config.model, model)
-  }
-  assert.equal(time.pending(), 0)
+  let resolved = false
+  const request = ctx.emit('agent/request', {
+    agent: { session: { id: 's1' } }, signal: new AbortController().signal, turn: 1, step: 1,
+  }, { provider: 'deepseek', model: 'deepseek-flash' }).then(value => { resolved = true; return value })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(resolved, false)
+  assert.equal(time.pending(), 1)
   const status = await ctx.command('offpeak').handler(invocation('s1', { provider: 'deepseek', model: 'deepseek-flash' }))
-  assert.match(status.text, /Pricing: UNTRACKED/)
-  assert.match(status.text, /only manages opencode-go/)
-  assert.match(status.text, /Held requests: none/)
+  assert.match(status.text, /Pricing: PEAK/)
+  assert.match(status.text, /Policy: deepseek-api/)
+  assert.match(status.text, /Held requests: 1 waiting for off-peak/)
+  time.advanceTo(OFF_PEAK)
+  const config = await request
+  assert.equal(config.provider, 'deepseek')
+  assert.equal(config.model, 'deepseek-flash')
+  assert.equal(resolved, true)
+  const after = await ctx.command('offpeak').handler(invocation('s1', { provider: 'deepseek', model: 'deepseek-flash' }))
+  assert.match(after.text, /Pricing: OFF_PEAK/)
+  assert.match(after.text, /Held requests: none/)
   time.restore()
   ctx.disposers.forEach(dispose => dispose())
   await rm(dir, { recursive: true, force: true })
 })
 
-test('a direct DeepSeek auxiliary stream is not wrapped by llm/stream', async () => {
+test('a direct DeepSeek auxiliary stream is held by llm/stream', async () => {
   const time = installFakeTime(PEAK)
   const dir = await mkdtemp(join(tmpdir(), 'dsh-offpeak-plugin-'))
   const ctx = makeContext()
@@ -194,10 +200,75 @@ test('a direct DeepSeek auxiliary stream is not wrapped by llm/stream', async ()
     dispatched = true
     yield { type: 'text-delta', text: 'ok' }
   })
-  const value = await stream[Symbol.asyncIterator]().next()
+  const iterator = stream[Symbol.asyncIterator]()
+  const first = iterator.next()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(dispatched, false)
+  assert.equal(time.pending(), 1)
+  time.advanceTo(OFF_PEAK)
+  const value = await first
   assert.equal(value.done, false)
   assert.equal(dispatched, true)
-  assert.equal(time.pending(), 0)
+  await iterator.return?.()
+  time.restore()
+  ctx.disposers.forEach(dispose => dispose())
+  await rm(dir, { recursive: true, force: true })
+})
+
+test('the session control applies to Direct DeepSeek', async () => {
+  const time = installFakeTime(PEAK)
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-offpeak-plugin-'))
+  const ctx = makeContext()
+  await apply(ctx, { displayTimeZone: 'UTC', statePath: join(dir, 'state.json') })
+  const command = ctx.command('offpeak')
+  await command.handler({ ...invocation('direct-1', { provider: 'deepseek', model: 'deepseek-flash' }), rawInput: 'session off' })
+  const allowed = await ctx.emit('agent/request', {
+    agent: { session: { id: 'direct-1' } }, signal: new AbortController().signal, turn: 1, step: 1,
+  }, { provider: 'deepseek', model: 'deepseek-flash' })
+  assert.equal(allowed.model, 'deepseek-flash')
+  let otherResolved = false
+  const other = ctx.emit('agent/request', {
+    agent: { session: { id: 'direct-2' } }, signal: new AbortController().signal, turn: 1, step: 1,
+  }, { provider: 'deepseek', model: 'deepseek-flash' }).then(() => { otherResolved = true })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(otherResolved, false)
+  time.advanceTo(OFF_PEAK)
+  await other
+  time.restore()
+  ctx.disposers.forEach(dispose => dispose())
+  await rm(dir, { recursive: true, force: true })
+})
+
+test('the global control pauses both managed paid providers', async () => {
+  const time = installFakeTime(PEAK)
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-offpeak-plugin-'))
+  const ctx = makeContext()
+  await apply(ctx, { displayTimeZone: 'UTC', statePath: join(dir, 'state.json') })
+  const command = ctx.command('offpeak')
+  await command.handler({ ...invocation('s1', { provider: 'deepseek', model: 'deepseek-flash' }), rawInput: 'off' })
+  const direct = await command.handler(invocation('s1', { provider: 'deepseek', model: 'deepseek-flash' }))
+  assert.match(direct.text, /Off-peak guard: OFF/)
+  assert.match(direct.text, /Request decision: WAITING/)
+  assert.match(direct.text, /Policy reason: Off-peak control is paused/)
+  const go = await command.handler(invocation('s1', { provider: 'opencode-go', model: 'deepseek-v4.1-flash' }))
+  assert.match(go.text, /Request decision: WAITING/)
+  await command.handler({ ...invocation('s1', { provider: 'deepseek', model: 'deepseek-flash' }), rawInput: 'on' })
+  assert.match((await command.handler(invocation('s1', { provider: 'deepseek', model: 'deepseek-flash' }))).text, /Request decision: WAITING/)
+  time.restore()
+  ctx.disposers.forEach(dispose => dispose())
+  await rm(dir, { recursive: true, force: true })
+})
+
+test('pricing lists both provider-specific policies', async () => {
+  const time = installFakeTime(PEAK)
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-offpeak-plugin-'))
+  const ctx = makeContext()
+  await apply(ctx, { displayTimeZone: 'UTC', statePath: join(dir, 'state.json') })
+  const pricing = await ctx.command('offpeak').handler({ ...invocation('s1', { provider: 'deepseek', model: 'deepseek-flash' }), rawInput: 'pricing' })
+  assert.match(pricing.text, /deepseek-opencode-go: providers opencode-go/)
+  assert.match(pricing.text, /deepseek-api: providers deepseek/)
+  assert.match(pricing.text, /deepseek-api: .*api-docs\.deepseek\.com/)
+  assert.match(pricing.text, /Current deepseek\/deepseek-flash: PEAK/)
   time.restore()
   ctx.disposers.forEach(dispose => dispose())
   await rm(dir, { recursive: true, force: true })

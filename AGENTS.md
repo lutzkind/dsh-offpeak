@@ -33,11 +33,16 @@ npm pack --dry-run
 ## Invariants
 
 - Pricing evaluation stays pure and clock-injected in `src/policy.ts`.
-- Only `opencode-go` is managed. Every other provider, including `deepseek`,
-  must pass through both waterfalls without evaluation, delay, or mutation.
+- Exactly two paid providers are managed: `opencode-go` and `deepseek`. Every
+  other provider, including `opencode` (Zen), passes through both waterfalls
+  without evaluation, delay, or mutation.
+- Keep one separate `PricingPolicy` per provider with its own source, model
+  coverage, and verification date, even when the windows currently match.
+- Direct DeepSeek is explicit/manual selection only. Never select it, never fall
+  back to it, and never let a hold change the provider.
 - The plugin must never send a provider request while a paid route is held.
 - `UNKNOWN` stays fail-closed; `FLAT` and `UNTRACKED` are never delayed.
-- Do not add a cross-provider fallback; direct DeepSeek is explicit only.
+- Do not add a cross-provider fallback.
 - Do not replace the Harness waterfalls with a proxy, daemon, or polling loop.
 - Session overrides are explicit and session-scoped; never globalize them.
 - Do not add a second scheduler or queue.

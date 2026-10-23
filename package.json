@@ -1,7 +1,7 @@
 {
   "name": "@lutzkind/dsh-offpeak",
-  "version": "0.2.0",
-  "description": "DeepSeek Harness native off-peak pricing guard for the OpenCode Go provider.",
+  "version": "0.2.1",
+  "description": "DeepSeek Harness native off-peak pricing guard for OpenCode Go and the DeepSeek Direct API.",
   "author": "Lutz Kind",
   "license": "MIT",
   "type": "module",

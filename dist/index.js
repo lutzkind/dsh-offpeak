@@ -7,7 +7,7 @@
  * and a shared wake signal, never on a polling loop.
  */
 import { OffpeakEngine } from './engine.js';
-import { BUILTIN_POLICIES, flatProviderNote, formatInTimeZone, isManagedProvider } from './policy.js';
+import { BUILTIN_POLICIES, flatProviderNote, formatInTimeZone, isManagedProvider, MANAGED_PROVIDERS } from './policy.js';
 import { OffpeakStateStore, resolveDshHome } from './state.js';
 import { join } from 'node:path';
 export const name = 'dsh-offpeak';
@@ -81,10 +81,13 @@ function formatStatus(engine, sessionId, route) {
         lines.push(`Current route: ${route.provider}/${route.model}`);
         lines.push(`Pricing: ${stateLabel(decision)}`);
         if (!isManagedProvider(route.provider)) {
-            lines.push(`Scope: dsh-offpeak only manages opencode-go; ${route.provider} is never intercepted, delayed, or authorized by this plugin.`);
+            lines.push(`Scope: dsh-offpeak manages ${MANAGED_PROVIDERS.join(' and ')}; ${route.provider} is out of scope and is never intercepted, delayed, or authorized by this plugin.`);
+        }
+        else if (decision.policy !== undefined) {
+            lines.push(`Policy: ${decision.policy.id} (${decision.policy.source}, verified ${decision.policy.verifiedAt ?? 'unknown'})`);
         }
         if (decision.reason !== undefined)
-            lines.push(`Policy: ${decision.reason}`);
+            lines.push(`Policy reason: ${decision.reason}`);
         if (decision.nextTransition !== undefined) {
             lines.push(`Next transition: ${engine.formatDeadline(decision.nextTransition)}`);
         }
@@ -120,7 +123,7 @@ function formatStatus(engine, sessionId, route) {
 function formatPricing(engine, route, sessionId) {
     const lines = ['Verified pricing policies:'];
     for (const policy of BUILTIN_POLICIES) {
-        lines.push(`  ${policy.id}: providers ${policy.providers.join(', ')}; peak windows ${policy.blocked.map(window => `${window.start}-${window.end} UTC`).join(', ')}; source ${policy.source}; verified ${policy.verifiedAt ?? 'unknown'}`);
+        lines.push(`  ${policy.id}: providers ${policy.providers.join(', ')}; models ${policy.models.join(', ')}; peak windows ${policy.blocked.map(window => `${window.start}-${window.end} UTC`).join(', ')}; source ${policy.source}; verified ${policy.verifiedAt ?? 'unknown'}`);
         if (policy.flatModels !== undefined)
             lines.push(`    flat models: ${policy.flatModels.join(', ')}`);
         lines.push(`    holidays: ${(policy.holidays ?? []).map(calendar => `${calendar.year} (${calendar.dates.length} dates, ${calendar.timeZone})`).join(', ') || 'none'}`);
@@ -194,7 +197,7 @@ export async function apply(ctx, rawConfig) {
     ctx.effect(() => ctx.provide('offpeak', service), 'dsh-offpeak service');
     ctx.on('agent/request', async (payload, next) => {
         const resolved = await next();
-        // Ownership boundary: any non-OpenCode-Go route passes through untouched.
+        // Ownership boundary: any unmanaged provider passes through untouched.
         if (!isManagedProvider(resolved.provider))
             return resolved;
         const sessionId = payload.agent.session.id;
@@ -230,8 +233,8 @@ export async function apply(ctx, rawConfig) {
     });
     ctx.commands.register({
         name: 'offpeak',
-        description: 'Inspect or control the verified OpenCode Go off-peak pricing guard',
+        description: 'Inspect or control the verified paid-provider off-peak pricing guard',
         handler: (invocation) => handleCommand(engine, invocation),
     });
-    ctx.logger.info(`dsh-offpeak: loaded (${config.enabled ? 'on' : 'paused'}, display ${config.displayTimeZone}, provider opencode-go only)`);
+    ctx.logger.info(`dsh-offpeak: loaded (${config.enabled ? 'on' : 'paused'}, display ${config.displayTimeZone}, providers ${MANAGED_PROVIDERS.join(', ')})`);
 }

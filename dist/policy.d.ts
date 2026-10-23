@@ -1,9 +1,13 @@
 /**
- * Verified OpenCode Go peak pricing policy and pure evaluation.
+ * Verified paid-provider pricing policies and pure evaluation.
  *
- * Ownership boundary: the shipped plugin manages the `opencode-go` provider
- * only. The direct DeepSeek API (`deepseek`) has its own native Harness
- * routing and must never be delayed, authorized, or rejected by this package.
+ * Ownership boundary: the shipped plugin manages the two paid providers
+ * `opencode-go` and `deepseek`. Each provider keeps its own policy, source, and
+ * model coverage even when the current peak windows happen to match. The
+ * OpenCode Zen reference provider (`opencode`) is out of scope.
+ *
+ * `dsh-free-first` remains OpenCode Go-only and never participates in these
+ * policies.
  */
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export interface WeeklyWindow {
@@ -54,11 +58,19 @@ export interface FlatProviderFact {
  */
 export declare const CHINA_PUBLIC_HOLIDAYS_2026: HolidayCalendar;
 export declare const CHINA_PUBLIC_HOLIDAYS: HolidayCalendar[];
-/** The one provider this plugin owns. Everything else is out of scope. */
-export declare const MANAGED_PROVIDER = "opencode-go";
+/** The paid providers this plugin owns. Everything else is out of scope. */
+export declare const MANAGED_PROVIDERS: readonly ["opencode-go", "deepseek"];
 export declare function isManagedProvider(providerId: string): boolean;
-/** Peak windows published by the OpenCode Go gateway, in UTC. */
-export declare const DEEPSEEK_PEAK_WINDOWS: WeeklyWindow[];
+/** Peak windows published for OpenCode Go DeepSeek models, in UTC. */
+export declare const OPENCODE_GO_DEEPSEEK_PEAK_WINDOWS: WeeklyWindow[];
+/**
+ * Peak windows published by the official DeepSeek Direct API, in UTC.
+ *
+ * Kept as a separate fact from the OpenCode Go windows even though the current
+ * values match: the two providers publish and may change their schedules
+ * independently.
+ */
+export declare const DEEPSEEK_DIRECT_PEAK_WINDOWS: WeeklyWindow[];
 /**
  * The Go pricing table prices only the DeepSeek models by time of day.
  * Every other documented Go model has one all-hours price and is listed
@@ -66,11 +78,26 @@ export declare const DEEPSEEK_PEAK_WINDOWS: WeeklyWindow[];
  */
 export declare const DEEPSEEK_OPENCODE_GO: PricingPolicy;
 /**
- * The direct DeepSeek API is intentionally NOT managed.
+ * Official DeepSeek Direct API pricing policy.
  *
- * It is an independent, manually selected provider. Keeping it out of
- * `BUILTIN_POLICIES` makes the boundary structural: the plugin cannot hold,
- * deny, authorize, or otherwise intercept a `deepseek` route.
+ * Freshly verified 2026-10-23 against
+ * https://api-docs.deepseek.com/quick_start/pricing:
+ *
+ * - peak hours are 01:00-04:00 and 06:00-10:00 UTC, Monday-Friday;
+ * - Chinese public holidays and weekends are off-peak in full;
+ * - off-peak rates are 50% of peak rates;
+ * - current models are `deepseek-flash` and `deepseek-v4-pro`; the legacy
+ *   aliases `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` are still
+ *   accepted and billed at the Flash price.
+ *
+ * This policy is deliberately separate from the OpenCode Go policy. The two
+ * providers may change their schedules independently even when the current
+ * windows match.
+ */
+export declare const DEEPSEEK_API: PricingPolicy;
+/**
+ * Both paid providers are managed, but through distinct policies. A model
+ * outside its provider's verified list still fails closed (UNKNOWN).
  */
 export declare const BUILTIN_POLICIES: PricingPolicy[];
 /** Providers verified to have no peak/off-peak tiers at all. */

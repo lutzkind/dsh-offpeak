@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-11-02 — Visible peak holds and a send-now switch
+
+Status: released `v0.3.0`, installed in the live host profiles `web`, `headless`, `acp`, `sdk`, and `tui`, verified.
+
+- Source: this repository (`ace9ab4`, tag `v0.3.0`).
+- Problem: a peak-priced request was parked with no UI feedback. The TUI showed
+  an indefinite spinner and the user could not tell the guard was the cause.
+- Holds are now visible: `tuiStatus` key `offpeak` plus one warning `tuiToast`
+  per held primary step, naming the route and the release time. Both seams are
+  feature-detected; headless/web/acp/sdk keep holding and report through
+  `/offpeak status`.
+- Control semantics changed: `/offpeak off` now dispatches peak-priced requests
+  immediately instead of pausing paid dispatch. `on` restores the queue. The
+  per-session override is unchanged.
+- `waitUntilAllowed()` gained an optional `onHoldChange` callback so the status
+  line follows the hold lifecycle without polling.
+- Tests: `npm test` (41 tests; adds status/toast visibility, the release-on-`off`
+  switch, and a hold on a host with no TUI services).
+- Host verification: `python3 /root/scripts/dsh_verify.py --live`,
+  `node /root/scripts/dsh_verify_runtime.mjs`,
+  `node /root/scripts/dsh_verify_plugins.mjs`, and
+  `python3 /root/scripts/dsh_verify_tui.py` — all PASS.
+
 ## 2026-10-23 — Restore DeepSeek Direct API management
 
 Status: released `v0.2.1`, installed in the live host profiles `web`, `headless`, `acp`, and `sdk`, verified.

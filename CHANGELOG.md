@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 — 2026-11-02
+
+- **Visible holds.** A held request now publishes a persistent `tuiStatus`
+  contribution (`offpeak: PEAK hold · releases 04:00 UTC · /offpeak off to send
+  now`) and one warning `tuiToast` per held primary step. Both seams are
+  feature-detected, so headless/web/acp/sdk profiles keep holding silently and
+  report through `/offpeak status`.
+- **`/offpeak off` now sends instead of pausing.** The control toggle releases
+  peak-priced dispatch immediately and holds nothing; `on` restores the queue.
+  This is a behavior change from 0.2.1, where `off` paused paid dispatch and a
+  held request stayed held until the guard was switched back on.
+- `waitUntilAllowed()` accepts an optional `onHoldChange` callback so a UI can
+  track the hold lifecycle without polling.
+- Tests cover the status/toast visibility, the release-on-`off` switch, and a
+  hold on a host with no TUI services.
+
 ## 0.2.1 — 2026-10-23
 
 - Restore native pricing management for the official DeepSeek Direct API

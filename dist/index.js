@@ -16,7 +16,7 @@ const USAGE = [
     'Usage: /offpeak [status|on|off|session on|session off|pricing|help]',
     '',
     '  status        control, current route, pricing state, holds, session protection',
-    '  on | off      resume or pause paid dispatch (off never authorizes peak pricing)',
+    '  on | off      guard on (queue peak-priced requests) or off (send them now)',
     '  session on    restore off-peak protection for this session (default)',
     '  session off   authorize verified peak inference for this session only',
     '  pricing       verified policies and the current route decision',
@@ -71,7 +71,7 @@ function formatStatus(engine, sessionId, route) {
     const state = engine.statusState();
     const now = Date.now();
     const lines = [];
-    lines.push(`Off-peak guard: ${state.enabled ? 'ON' : 'OFF (paid dispatch paused)'}`);
+    lines.push(`Off-peak guard: ${state.enabled ? 'ON' : 'OFF (peak dispatch allowed)'}`);
     lines.push(`Display time zone: ${engine.displayTimeZone}`);
     if (route === undefined) {
         lines.push('Current route: none recorded yet');
@@ -141,7 +141,41 @@ function formatPricing(engine, route, sessionId) {
 function parseArgs(raw) {
     return raw.trim().toLowerCase().split(/\s+/u).filter(Boolean);
 }
-function handleCommand(engine, invocation) {
+function createUiBridge(ctx) {
+    const service = (name) => {
+        try {
+            return ctx.get(name);
+        }
+        catch {
+            return undefined;
+        }
+    };
+    const status = service('tuiStatus');
+    const toast = service('tuiToast');
+    return {
+        setStatus(text) {
+            if (status === undefined || typeof status.set !== 'function')
+                return;
+            try {
+                status.set('offpeak', text);
+            }
+            catch {
+                /* a status contribution must never break the guard */
+            }
+        },
+        toast(text, color = 'warning', timeoutMs = 8000) {
+            if (toast === undefined || typeof toast.show !== 'function')
+                return;
+            try {
+                toast.show(text, { color, timeoutMs });
+            }
+            catch {
+                /* a toast must never break the guard */
+            }
+        },
+    };
+}
+function handleCommand(engine, invocation, onControlChange) {
     const args = parseArgs(invocation.rawInput);
     const sessionId = invocation.agent.session.id;
     const route = routeOf(invocation.agent);
@@ -156,21 +190,27 @@ function handleCommand(engine, invocation) {
     if (first === 'on' || first === 'off') {
         if (second !== undefined)
             return { kind: 'error', text: USAGE };
-        return engine.setEnabled(first === 'on').then(state => ({
-            kind: 'success',
-            text: state.enabled
-                ? 'Off-peak guard ON. Held requests are re-checked now.'
-                : 'Off-peak guard OFF. Paid dispatch is paused; this never authorizes peak pricing. Use /offpeak on to resume.',
-        }));
+        return engine.setEnabled(first === 'on').then(state => {
+            onControlChange?.();
+            return {
+                kind: 'success',
+                text: state.enabled
+                    ? 'Off-peak guard ON. Peak-priced requests are queued until the next off-peak boundary.'
+                    : 'Off-peak guard OFF. Peak-priced requests are dispatched immediately; nothing is held.',
+            };
+        });
     }
     if (first === 'session') {
         if (second === 'on' || second === 'off') {
-            return engine.setSessionProtection(sessionId, second).then(() => ({
-                kind: 'success',
-                text: second === 'off'
-                    ? 'Session off-peak protection is OFF. This session may use verified peak-priced inference; other sessions stay protected. UNKNOWN models still fail closed.'
-                    : 'Session off-peak protection is ON. Peak-priced requests in this session wait for off-peak.',
-            }));
+            return engine.setSessionProtection(sessionId, second).then(() => {
+                onControlChange?.();
+                return {
+                    kind: 'success',
+                    text: second === 'off'
+                        ? 'Session off-peak protection is OFF. This session may use verified peak-priced inference; other sessions stay protected. UNKNOWN models still fail closed.'
+                        : 'Session off-peak protection is ON. Peak-priced requests in this session wait for off-peak.',
+                };
+            });
         }
         return { kind: 'error', text: USAGE };
     }
@@ -195,6 +235,20 @@ export async function apply(ctx, rawConfig) {
     };
     ctx.effect(() => () => engine.dispose(), 'dsh-offpeak engine');
     ctx.effect(() => ctx.provide('offpeak', service), 'dsh-offpeak service');
+    const ui = createUiBridge(ctx);
+    const statusLine = () => {
+        const holds = engine.activeHolds();
+        if (!engine.statusState().enabled)
+            return 'offpeak: OFF · peak spend allowed';
+        if (holds.length === 0)
+            return 'offpeak: on';
+        const first = holds[0];
+        const count = holds.length > 1 ? ` ×${holds.length}` : '';
+        const release = first.nextTransition === undefined ? '' : ` · releases ${engine.formatDeadline(first.nextTransition)}`;
+        return `offpeak: PEAK hold${count}${release} · /offpeak off to send now`;
+    };
+    const refreshStatus = () => ui.setStatus(statusLine());
+    refreshStatus();
     ctx.on('agent/request', async (payload, next) => {
         const resolved = await next();
         // Ownership boundary: any unmanaged provider passes through untouched.
@@ -204,12 +258,18 @@ export async function apply(ctx, rawConfig) {
         const decision = engine.evaluate(resolved.provider, resolved.model, sessionId);
         if (decision.allowed)
             return resolved;
+        const release = decision.nextTransition === undefined
+            ? ''
+            : ` until ${engine.formatDeadline(decision.nextTransition)}`;
+        ui.toast(`Peak pricing: ${resolved.provider}/${resolved.model} is queued${release}. `
+            + 'Run /offpeak off to send now, or /offpeak session off to allow peak for this session.', 'warning', 10000);
         await engine.waitUntilAllowed({
             provider: resolved.provider,
             model: resolved.model,
             sessionId,
             kind: 'primary',
             signal: payload.signal,
+            onHoldChange: refreshStatus,
         });
         return resolved;
     }, { prepend: true });
@@ -227,6 +287,7 @@ export async function apply(ctx, rawConfig) {
                 sessionId: options.sessionId,
                 kind,
                 signal: options.signal,
+                onHoldChange: refreshStatus,
             });
             yield* next();
         })();
@@ -234,7 +295,7 @@ export async function apply(ctx, rawConfig) {
     ctx.commands.register({
         name: 'offpeak',
         description: 'Inspect or control the verified paid-provider off-peak pricing guard',
-        handler: (invocation) => handleCommand(engine, invocation),
+        handler: (invocation) => handleCommand(engine, invocation, refreshStatus),
     });
-    ctx.logger.info(`dsh-offpeak: loaded (${config.enabled ? 'on' : 'paused'}, display ${config.displayTimeZone}, providers ${MANAGED_PROVIDERS.join(', ')})`);
+    ctx.logger.info(`dsh-offpeak: loaded (${config.enabled ? 'on' : 'off'}, display ${config.displayTimeZone}, providers ${MANAGED_PROVIDERS.join(', ')})`);
 }

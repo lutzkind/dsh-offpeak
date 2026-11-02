@@ -77,11 +77,25 @@ closed like any other interrupted request; resuming the session re-enters the
 policy. Controls are session-scoped, not provider-scoped: a session opt-out
 applies to whichever managed paid provider that session uses.
 
+`enabled` is the global switch: `true` queues verified peak-priced dispatch
+until the boundary, `false` dispatches immediately and holds nothing. It is not
+a pause — the explicit "send now" switch spends at peak rates.
+
 ## Timing
 
 `waitUntilAllowed()` evaluates, registers one hold, schedules one timer for
 `nextTransition`, and waits on either that timer or a shared wake signal from a
-control change. It re-evaluates after every wake. There is no polling.
+control change. It re-evaluates after every wake. There is no polling. Every
+hold registration and release calls the optional `onHoldChange` callback, which
+is how the terminal status line follows the hold lifecycle without polling.
+
+## Visibility
+
+The plugin has no UI of its own. When the host mounts the TUI extension seams it
+publishes one `tuiStatus` key (`offpeak`) and one `tuiToast` per held primary
+step; both are feature-detected and best-effort, so a missing or refusing host
+changes nothing about the pricing decision. Profiles without those seams
+(headless, web, acp, sdk) hold silently and report through `/offpeak status`.
 
 ## Service
 
@@ -89,7 +103,7 @@ The plugin provides `ctx.offpeak`:
 
 ```ts
 evaluate(provider, model, sessionId?) -> decision
-waitUntilAllowed({ provider, model, sessionId?, kind?, signal? }) -> decision
+waitUntilAllowed({ provider, model, sessionId?, kind?, signal?, onHoldChange? }) -> decision
 status() -> control state plus active holds
 activeHolds() -> hold records
 ```

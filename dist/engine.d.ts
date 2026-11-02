@@ -23,6 +23,9 @@ export interface WaitRequest {
     sessionId?: string;
     kind?: HoldKind;
     signal?: AbortSignal;
+    /** Called whenever this request registers or clears its hold, so a UI can
+     * show and clear a visible "queued until off-peak" indicator. */
+    onHoldChange?: () => void;
 }
 export interface OffpeakEngineOptions {
     store: OffpeakStateStore;

@@ -99,12 +99,12 @@ test('session on restores protection for the next request', async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-test('off pauses dispatch and never authorizes peak pricing', async () => {
+test('off releases peak dispatch instead of parking it', async () => {
   const { engine, clock, dir } = await engineAt()
   await engine.setEnabled(false)
   const decision = engine.evaluate('opencode-go', 'deepseek-v4.1-flash', 's1')
-  assert.equal(decision.allowed, false)
-  assert.match(decision.reason, /paused/)
+  assert.equal(decision.allowed, true)
+  assert.match(decision.reason, /guard is off/)
   await engine.setEnabled(true)
   assert.equal(engine.evaluate('opencode-go', 'deepseek-v4.1-flash', 's1').allowed, false)
   await clock.advanceTo(Date.parse('2026-10-19T04:00:00Z'))
@@ -175,13 +175,13 @@ test('a Direct DeepSeek peak request parks with one boundary timer', async () =>
   await rm(dir, { recursive: true, force: true })
 })
 
-test('the global control applies to Direct DeepSeek', async () => {
+test('the global control releases Direct DeepSeek when switched off', async () => {
   const { engine, clock, dir } = await engineAt()
   await engine.setEnabled(false)
-  const paused = engine.evaluate('deepseek', 'deepseek-flash', 'direct-1')
-  assert.equal(paused.state, 'PEAK')
-  assert.equal(paused.allowed, false)
-  assert.match(paused.reason, /paused/)
+  const released = engine.evaluate('deepseek', 'deepseek-flash', 'direct-1')
+  assert.equal(released.state, 'PEAK')
+  assert.equal(released.allowed, true)
+  assert.match(released.reason, /guard is off/)
   await engine.setEnabled(true)
   assert.equal(engine.evaluate('deepseek', 'deepseek-flash', 'direct-1').allowed, false)
   await clock.advanceTo(Date.parse('2026-10-19T04:00:00Z'))

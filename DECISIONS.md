@@ -49,7 +49,25 @@ auxiliary and non-fatal.
 released by `/offpeak session on`, never inherited by other sessions, and does
 not bypass `UNKNOWN` or invalid policy data.
 
-## 2026-10-23 — `off` pauses, it does not authorize
+## 2026-11-02 — `off` means "send now"; a hold is always visible
+
+The control switch is user-facing: `off` must dispatch immediately instead of
+parking requests. The earlier v0.2.1 behavior (pause paid dispatch until the
+operator switched the guard back on) turned the obvious "off" switch into a
+second, silent block and contradicted the label. `off` now authorizes dispatch;
+the explicit session override remains the narrower, per-session alternative.
+
+A held request is never silent. The plugin publishes a `tuiStatus` contribution
+and one `tuiToast` per held primary step, naming the route and the release time.
+Both seams are feature-detected: headless/web/acp/sdk profiles have no terminal
+surface, so they keep the behavior of holding and reporting through
+`/offpeak status`.
+
+## 2026-10-23 — `off` pauses, it does not authorize (superseded 2026-11-02)
+
+Superseded by "2026-11-02 — `off` means send now". Kept as history: turning the
+guard off used to pause paid dispatch without releasing held requests, which
+made the switch a second silent block.
 
 Turning the guard off pauses paid dispatch. It does not release held requests
 and never creates peak authorization. The only peak authorization is the

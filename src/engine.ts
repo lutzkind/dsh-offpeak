@@ -34,6 +34,9 @@ export interface WaitRequest {
   sessionId?: string
   kind?: HoldKind
   signal?: AbortSignal
+  /** Called whenever this request registers or clears its hold, so a UI can
+   * show and clear a visible "queued until off-peak" indicator. */
+  onHoldChange?: () => void
 }
 
 export interface OffpeakEngineOptions {
@@ -103,14 +106,18 @@ export class OffpeakEngine {
           reason: 'Session protection is off; verified peak inference is authorized for this session.',
         }
       }
-      if (!state.enabled) {
-        return {
-          ...base,
-          allowed: false,
-          enabled: false,
-          sessionProtection,
-          reason: 'Off-peak control is paused. Paid requests wait until /offpeak on.',
-        }
+    }
+    if (!state.enabled) {
+      // The control toggle is the user-facing "guard off" switch: it must
+      // never delay a request. Without this branch `off` would park every
+      // paid request until the operator switched the guard back on, which is
+      // the opposite of what a switch labelled "off" means.
+      return {
+        ...base,
+        allowed: true,
+        enabled: false,
+        sessionProtection,
+        reason: 'Off-peak guard is off; dispatch is not delayed.',
       }
     }
     return {
@@ -144,6 +151,7 @@ export class OffpeakEngine {
           since: now,
           ...(decision.nextTransition === undefined ? {} : { nextTransition: decision.nextTransition }),
         })
+        request.onHoldChange?.()
 
         const waiter: Waiter = { controller: new AbortController() }
         this.waiters.add(waiter)
@@ -169,7 +177,10 @@ export class OffpeakEngine {
         signal?.throwIfAborted()
       }
     } finally {
-      if (holdId !== undefined) this.holds.delete(holdId)
+      if (holdId !== undefined) {
+        this.holds.delete(holdId)
+        request.onHoldChange?.()
+      }
     }
   }
 

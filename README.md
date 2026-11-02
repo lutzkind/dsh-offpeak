@@ -114,14 +114,21 @@ extending a policy.
 
 - `status` shows the control toggle, current route, pricing state, policy id,
   next transition, held requests, and this session's protection.
-- `on` / `off` resume or pause paid dispatch for both managed providers. `off`
-  never authorizes peak pricing: a held request stays held until the guard is on
-  again.
+- `on` / `off` turn the guard on or off for both managed providers. `on` queues
+  a peak-priced request until the next off-peak boundary; `off` dispatches it
+  immediately and holds nothing. `off` therefore spends at peak rates — it is
+  the explicit "send now" switch, not a pause.
 - `session off` authorizes verified peak-priced inference for the current
   session only, on either managed provider. `UNKNOWN` models still fail closed,
   and other sessions and background work are unaffected. `session on` restores
   the default.
 - `pricing` prints both verified policies and the current route decision.
+
+While a request is held, the terminal surface shows a persistent status line
+(`offpeak: PEAK hold · releases 04:00 UTC · /offpeak off to send now`) and one
+warning toast naming the route and the release time. Profiles without a terminal
+surface (headless, web, acp, sdk) simply log and hold; `/offpeak status` reports
+the same hold.
 
 Session overrides persist in `$DSH_HOME/offpeak/state.json` (mode 0600). The
 control toggle and overrides survive restarts. A hold itself is not persisted:

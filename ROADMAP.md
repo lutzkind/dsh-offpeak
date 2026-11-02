@@ -7,6 +7,8 @@
 - Provider boundary: `opencode-go` and `deepseek` are managed; everything else
   passes through.
 - Primary and auxiliary request holds for both paid providers.
+- Visible holds: a `tuiStatus` line and one warning toast per held primary step.
+- A control switch whose `off` state dispatches peak requests immediately.
 - Session-scoped explicit peak authorization.
 - `offpeak` service for free-first OpenCode Go paid timing.
 - `/offpeak` status and control commands.
@@ -23,5 +25,6 @@
 
 - A queue or background scheduler.
 - A proxy that injects pricing headers.
-- Global peak authorization.
+- Implicit or automatic peak authorization: the only authorizations are the
+  explicit control switch (`/offpeak off`) and the per-session override.
 - Persisting and replaying an in-flight paid request.
